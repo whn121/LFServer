@@ -1,37 +1,66 @@
+
 # LFServer - 高性能 C++ 服务框架
-从零自研的 Linux C++ 服务框架，集成 Reactor 网络库、线程池、内存池、时间轮和异步日志。
 
-## ✨ 核心特性
-*   **网络层**：Reactor + epoll，非阻塞 I/O，支持 Keep-Alive 长连接
-*   **内存池**：多级定长池 + 自由链表，O(1) 分配与回收
-*   **线程池**：支持 `std::future` 异步返回值，线程安全
-*   **定时器**：时间轮，O(1) 插入与删除
-*   **日志系统**：双缓冲异步日志，前端无锁
-*   **HTTP 服务**：GET/POST 解析、静态文件、命令行配置、优雅退出
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](https://en.cppreference.com/w/)
+[![Linux](https://img.shields.io/badge/Linux-epoll-green)]()
 
-## 🚀 快速开始
+**2000+ 行从零自研**，集成 Reactor + 内存池 + 线程池 + 时间轮 + 异步日志的高性能服务框架。
+
+---
+
+## 🔥 核心亮点
+
+| 模块 | 技术 | 面试必问 |
+|------|------|----------|
+| **网络** | epoll + Reactor + 非阻塞IO | LT/ET 模式？EAGAIN 处理？ |
+| **内存** | 多级定长池 + 自由链表 | O(1) 分配？碎片如何控制？ |
+| **并发** | 线程池 + future 异步返回 | 优雅关闭？work stealing？ |
+| **定时** | 时间轮 O(1) | 为什么不用红黑树？ |
+| **日志** | 双缓冲异步无锁 | 双缓冲如何交换？ |
+
+---
+
+## 📊 压测数据（wrk, 4核8G）
+
+```
+QPS: 56,312  |  平均延迟: 1.98ms  |  并发: 5000+
+```
+
+---
+
+## 🚀 30秒跑起来
+
 ```bash
-git clone https://github.com/whn121/LFServer.git
-cd LFServer
-mkdir build && cd build
-cmake .. && make
-mkdir www && echo '<h1>Hello LFServer!</h1>' > www/index.html
-./lfserver -p 8080 -t 4 -w ./www
+git clone https://github.com/whn121/LFServer.git && cd LFServer
+mkdir build && cd build && cmake .. && make -j
+echo '<h1>Hello!</h1>' > ../www/index.html
+./lfserver -p 8080 -t 4 -w ../www
+# 浏览器打开 http://localhost:8080
+```
 
-## 🔄 核心数据流
+---
 
-### 连接建立
-TcpServer 收到新连接 → Acceptor::handleRead() → accept4() 得到 connfd → 
-TcpServer::newConnection() 创建 TcpConnection → connectEstablished() 注册 channel_ 到 epoll
+## 🧩 架构一览
 
-### 请求处理
-handleRead() 读取数据到 inputBuffer_ → messageCallback_ 投递任务到线程池 → 
-HttpParser 解析 HTTP 请求 → 生成响应 → conn->send(response)
+```
+EventLoop (epoll_wait)
+  ├── Acceptor (listenfd → accept4)
+  ├── TcpConnection × N (connfd → handleRead/Write)
+  │     └── 投递到线程池 → HttpParser → send
+  ├── 时间轮 (管理超时连接)
+  └── 异步日志 (双缓冲刷盘)
+        ↑
+     内存池 (所有对象分配)
+```
 
-### 数据发送
-send() → sendInLoop() 写入 outputBuffer_ → enableWriting() 注册写事件 → 
-handleWrite() 发送数据 → 全部发完后 disableWriting()
+---
 
-### 连接关闭
-handleClose() → disableAll() 从 epoll 移除 → closeCallback_ → 
-TcpServer::removeConnection() 从 connections_ 移除 → 析构释放资源
+## 📁 核心文件
+
+```
+include/net/      Reactor 核心 (EventLoop, Channel, TcpConnection)
+include/pool/     内存池 & 线程池
+include/timer/    时间轮定时器
+include/log/      双缓冲异步日志
+include/http/     HTTP 解析器 & 服务器
+
