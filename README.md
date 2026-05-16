@@ -17,3 +17,21 @@ mkdir build && cd build
 cmake .. && make
 mkdir www && echo '<h1>Hello LFServer!</h1>' > www/index.html
 ./lfserver -p 8080 -t 4 -w ./www
+
+## 🔄 核心数据流
+
+### 连接建立
+TcpServer 收到新连接 → Acceptor::handleRead() → accept4() 得到 connfd → 
+TcpServer::newConnection() 创建 TcpConnection → connectEstablished() 注册 channel_ 到 epoll
+
+### 请求处理
+handleRead() 读取数据到 inputBuffer_ → messageCallback_ 投递任务到线程池 → 
+HttpParser 解析 HTTP 请求 → 生成响应 → conn->send(response)
+
+### 数据发送
+send() → sendInLoop() 写入 outputBuffer_ → enableWriting() 注册写事件 → 
+handleWrite() 发送数据 → 全部发完后 disableWriting()
+
+### 连接关闭
+handleClose() → disableAll() 从 epoll 移除 → closeCallback_ → 
+TcpServer::removeConnection() 从 connections_ 移除 → 析构释放资源
